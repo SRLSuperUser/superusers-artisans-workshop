@@ -1,0 +1,394 @@
+program superusers_artisans_workshop;
+
+{**
+ * Copyright (c) 2014 SuperUser.
+ *
+ *}
+
+{$define SMART}
+{$i srl-6/srl.simba}
+{$i srl-6/lib/misc/srlplayerform.simba}
+{$i sps/lib/sps-rs3.simba}
+
+const
+  CFG_SHOW_SRL_DEBUG = 0;
+  CFG_IGNOT_TYPE = 1;
+  CFG_IGNOT_TIER = 2;
+
+type
+  TSurfacePartFilterFunc = function (
+    const atpa: T2DPointArray;
+    const p_: TPoint;
+    out index: integer
+  ): TPoint;
+
+  TSurfacePart = record
+    bounds,
+    size: TBox;
+    color_settings: TColorSettings;
+    color_tolerance,
+    color,
+    step,
+    max_distance,
+    min_pixel_count: integer;
+    p: TPoint;
+    base_atpa: T2DPointArray;
+  end
+
+  TSurfacePartArray = array of ^TSurfacePart;
+
+  TSurfaceObject = record
+    name: string;
+    parts: TSurfacePartArray;
+    bounds: TBox;
+    filter: TSurfacePartFilterFunc;
+  end
+
+  TIgnot = record
+    type_: string;
+    tier,
+    smithed,
+    inventory_item_dtm: integer;
+    base_xp: extended;
+  end
+
+  TIgnotArray = array of ^TIgnot;
+
+  TAnvil = record
+    surface_object: TSurfaceObject;
+  end
+
+  TStatistics = record
+    ignot: ^TIgnot;
+  end
+
+var
+  statistics: TStatistics;
+  ignots: TIgnotArray;
+  ignot: ^TIgnot = nil;
+  anvil: TAnvil;
+
+function TBox.FindColorsTPA(
+  const tcs: TColorSettings;
+  d, c, t: integer
+): TPointArray
+var
+  tpa: TPointArray;
+begin
+  FindColorsTolerance(tpa, c, self, t, tcs);
+
+  result := RemoveDistTPointArray(
+    mainscreen.playerPoint.x,
+    mainscreen.playerPoint.y,
+    d,
+    RemoveDistTPointArray(
+      mainscreen.playerPoint.x, mainscreen.playerPoint.y, 10, tpa, false
+    ),
+    true
+  );
+end
+
+function TPointArray.AssertBoxSize(const size: TBox): boolean
+begin
+  result := true;
+
+  with GetTPABounds(self) do
+    if (x2 - x1 < size.x1) or
+       (x2 - x1 > size.x2) or
+       (y2 - y1 < size.y1) or
+       (y2 - y1 > size.y2) then
+      result := false;
+end
+
+procedure T2DPointArray.DeleteIndex(index: integer)
+var
+  i: integer;
+begin
+  for i := index to High(self) - 1 do
+    self[i] := self[i + 1];
+
+  SetLength(self, Length(self) - 1);
+end
+
+function SurfaceFilterClosest(
+  const atpa: T2DPointArray;
+  const p_: TPoint;
+  out index: integer
+): TPoint
+var
+  i: integer;
+  p: TPoint;
+  c, ch: extended;
+begin
+  ch := $ffff;
+
+  for i := 0 to High(atpa) do begin
+    p := MiddleTPA(atpa[i]);
+    c := Sqrt(Sqr(Abs(p_.x - p.x)) + Sqr(Abs(p_.y - p.y)));
+
+    if c < ch then begin
+      ch := c;
+      result := p;
+      index := i;
+    end
+  end
+end
+
+function TSurfacePart.Find(
+  const b: TBox;
+  base: boolean = false;
+  const f: TSurfacePartFilterFunc = @SurfaceFilterClosest
+): boolean
+var
+  atpa, atpa_: T2DPointArray;
+  i: integer;
+begin
+  result := false;
+  atpa := SplitTPAEx(
+    b.FindColorsTPA(
+      self.color_settings,
+      self.max_distance,
+      self.color,
+      self.color_tolerance
+    ),
+    self.step,
+    self.step // TODO: Individual x/y -steps.
+  );
+
+  for i := 0 to High(atpa) do begin
+    if atpa[i].AssertBoxSize(self.size) and
+      (Length(atpa[i]) > self.min_pixel_count) then begin
+      SetLength(atpa_, Length(atpa_) + 1);
+
+      atpa_[High(atpa_)] := CopyTPA(atpa[i]);
+    end else begin
+      {$ifdef DEBUG_SURFACES}
+
+      {$endif}
+    end
+  end
+
+  if Length(atpa_) > 0 then begin
+    if base then begin
+      SetLength(self.base_atpa, 0);
+
+      self.base_atpa := CopyATPA(atpa_);
+    end else begin
+      f(atpa_, mainscreen.playerPoint, i);
+
+      self.bounds := GetTPABounds(atpa_[i]);
+    end
+
+    result := true;
+  end
+end
+
+function TSurfacePartArray.Create(const csp: TSurfacePart = []): ^TSurfacePart
+begin
+  SetLength(self, Length(self) + 1);
+
+  New(result);
+
+  with result^ do begin
+    base_atpa := csp.base_atpa;
+    bounds := csp.bounds;
+    color := csp.color;
+    color_settings := csp.color_settings;
+    color_tolerance := csp.color_tolerance;
+    max_distance := csp.max_distance;
+    min_pixel_count := csp.min_pixel_count;
+    size := csp.size;
+    step := csp.step;
+  end
+
+  self[High(self)] := result;
+end
+
+function TSurfaceObject.Point(): TPoint
+begin
+  result := self.bounds.GetMiddle();
+end
+
+function TSurfaceObject.Find(
+  const area: TBox;
+  const f: TSurfacePartFilterFunc = nil
+): boolean
+var
+  many_parts: boolean;
+  i, k, j: integer;
+  o: TSurfacePartFilterFunc;
+begin
+  many_parts := Length(self.parts) > 1;
+  result := true;
+
+  if @f <> nil then begin
+    o := @self.filter;
+    self.filter := @f;
+  end
+
+  {$ifdef DEBUG_SURFACES}
+
+  smartImage.clear();
+
+  {$endif}
+
+  for i := 0 to High(self.parts) do begin
+    if i = 0 then
+      result := self.parts[0]^.Find(area, many_parts, @self.filter)
+    else begin
+      if not result then begin
+        if @f <> nil then
+          self.filter := @o;
+
+        Exit();
+      end
+
+      k := High(self.parts[0]^.base_atpa);
+
+      for j := 0 to k do begin
+        {$ifdef DEBUG_SURFACES}
+
+        smartImage.drawBox(self.parts[0]^.base_atpa[j].GetBounds(), clRed);
+
+        {$endif}
+
+        if not self.parts[i]^.Find(
+          GetTPABounds(self.parts[0]^.base_atpa[j]),
+          false,
+          @self.filter
+        ) then begin
+          self.parts[0]^.base_atpa.DeleteIndex(j);
+
+          Dec(k);
+          Dec(j);
+        end
+      end
+    end
+  end
+
+  if many_parts and (Length(self.parts[0]^.base_atpa) = 0) then begin
+    if @f <> nil then
+      self.filter := @o;
+
+    Exit(false);
+  end
+
+  if many_parts then begin
+    self.filter(self.parts[0]^.base_atpa, mainscreen.playerPoint, i);
+
+    self.bounds := GetTPABounds(self.parts[0]^.base_atpa[i]);
+
+    SetLength(self.parts[0]^.base_atpa, 0);
+  end else
+    self.bounds := self.parts[0]^.bounds;
+
+  {$ifdef DEBUG_SURFACES}
+
+  for i := 0 to High(self.parts[0]^.base_atpa) do
+    smartImage.drawBox(self.parts[0]^.base_atpa[i].GetBounds(), clYellow);
+
+  {$endif}
+
+  if @f <> nil then
+    self.filter := @o;
+end
+
+function TIgnotArray.Create(
+  const _type_: string = '';
+  _tier: integer = 1;
+  _base_xp: extended = 0
+): ^TIgnot
+begin
+  SetLength(self, Length(self) + 1);
+
+  New(result);
+
+  with result^ do begin
+    type_ := _type_;
+    tier := _tier;
+    base_xp := _base_xp;
+  end
+
+  self[High(self)] := result;
+end
+
+function TIgnotArray.Get(const type_: string; tier: integer): ^TIgnot
+var
+  i: integer;
+begin
+  for i := 0 to High(self) do
+    if (self[i]^.type_ = type_) and (self[i]^.tier = tier) then
+      Exit(self[i]);
+
+  result := nil;
+end
+
+procedure TPlayer.Configure()
+begin
+  disableSRLDebug := not booleans[CFG_SHOW_SRL_DEBUG];
+  ignot := ignots.Get(strings[CFG_IGNOT_TYPE], integers[CFG_IGNOT_TIER]);
+end
+
+procedure Initialize()
+var
+  i, j: integer;
+begin
+  ClearDebug();
+  AddOnTerminate('Uninitialize');
+
+  ignots.Create('Iron', 1, 101);
+
+  with playerform do begin
+    name := 'SuperUser''s Artisans Workshop';
+    scriptHelpThread := 'http://villavu.com/forum/showthread.php?t=';
+    scriptSettingsPath := AppPath + 'Scripts/superusers-artisans-workshop.txt';
+
+    comboBoxLabels := ['Ignot type', 'Ignot tier'];
+    comboBoxDefaults := ['Iron', '1'];
+    comboBoxItems := [['Iron'], ['1']];
+
+    checkBoxLabels := ['Show SRL debug'];
+    checkBoxDefaults := ['false'];
+  end
+
+  disableSRLDebug := true;
+  currentPlayer := 0;
+
+  RunPlayerForm();
+
+  players.setup(playerForm.playerNames, playerForm.playerFile);
+
+  for i := 0 to high(players) do
+    with players[i] do begin
+      booleans[CFG_SHOW_SRL_DEBUG] := StrToBool(
+        playerForm.players[i].settings[CFG_SHOW_SRL_DEBUG]
+      );
+
+      strings[CFG_IGNOT_TYPE] := playerForm.players[i].settings[CFG_IGNOT_TYPE];
+
+      integers[CFG_IGNOT_TIER] := StrToInt(
+        playerForm.players[i].settings[CFG_IGNOT_TIER]
+      );
+
+      // for j := 0 to High(playerForm.players[i].settings) do
+      //   WriteLn(playerForm.players[i].settings[j]);
+    end
+
+  players[currentPlayer].Configure();
+end
+
+procedure Uninitialize()
+var
+  i: integer;
+begin
+  for i := 0 to High(ignots) do
+    FreeMem(ignots[i]);
+end
+
+function GetInstructions(): string
+begin
+end
+
+begin
+  Initialize();
+end.
