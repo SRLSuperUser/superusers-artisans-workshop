@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<acaprofile>
+  <profile name="Anvil" cts="2">
+    <colordata color="4871265"/>
+    <colordata color="5068646"/>
+    <colordata color="4805472"/>
+    <colordata color="5266024"/>
+    <colordata color="5331818"/>
+    <colordata color="5002596"/>
+    <colordata color="5068388"/>
+    <colordata color="4541516"/>
+  </profile>
+  <profile name="Anvil - anti" cts="2">
+    <colordata color="6846346"/>
+    <colordata color="6911882"/>
+    <colordata color="6714246"/>
+    <colordata color="6977932"/>
+    <colordata color="5858678"/>
+  </profile>
+  <profile name="Chute" cts="3">
+    <colordata color="1184276"/>
+    <colordata color="1184275"/>
+  </profile>
+  <profile name="Anvil - anti 2" cts="3">
+    <colordata color="1711138"/>
+    <colordata color="1381660"/>
+    <colordata color="2039593"/>
+    <colordata color="1184276"/>
+  </profile>
+</acaprofile>

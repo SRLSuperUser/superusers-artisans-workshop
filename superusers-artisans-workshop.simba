@@ -10,6 +10,8 @@ program superusers_artisans_workshop;
 {$i srl-6/lib/misc/srlplayerform.simba}
 {$i sps/lib/sps-rs3.simba}
 
+{$define _DEBUG_SURFACES}
+
 const
   CFG_SHOW_SRL_DEBUG = 0;
   CFG_IGNOT_TYPE = 1;
@@ -31,6 +33,7 @@ type
     step,
     max_distance,
     min_pixel_count: integer;
+    anti: boolean;
     p: TPoint;
     base_atpa: T2DPointArray;
   end
@@ -54,10 +57,6 @@ type
 
   TIgnotArray = array of ^TIgnot;
 
-  TAnvil = record
-    surface_object: TSurfaceObject;
-  end
-
   TStatistics = record
     ignot: ^TIgnot;
   end
@@ -66,7 +65,7 @@ var
   statistics: TStatistics;
   ignots: TIgnotArray;
   ignot: ^TIgnot = nil;
-  anvil: TAnvil;
+  chute, anvil: TSurfaceObject;
 
 function TBox.FindColorsTPA(
   const tcs: TColorSettings;
@@ -199,6 +198,7 @@ begin
     min_pixel_count := csp.min_pixel_count;
     size := csp.size;
     step := csp.step;
+    anti := csp.anti;
   end
 
   self[High(self)] := result;
@@ -214,7 +214,7 @@ function TSurfaceObject.Find(
   const f: TSurfacePartFilterFunc = nil
 ): boolean
 var
-  many_parts: boolean;
+  many_parts, b: boolean;
   i, k, j: integer;
   o: TSurfacePartFilterFunc;
 begin
@@ -252,11 +252,17 @@ begin
 
         {$endif}
 
-        if not self.parts[i]^.Find(
+        b := self.parts[i]^.Find(
           GetTPABounds(self.parts[0]^.base_atpa[j]),
           false,
           @self.filter
-        ) then begin
+        );
+
+        if self.parts[i]^.anti then
+          b := not b;
+
+        if not b then begin
+          // Remove from potential hits.
           self.parts[0]^.base_atpa.DeleteIndex(j);
 
           Dec(k);
@@ -277,8 +283,6 @@ begin
     self.filter(self.parts[0]^.base_atpa, mainscreen.playerPoint, i);
 
     self.bounds := GetTPABounds(self.parts[0]^.base_atpa[i]);
-
-    SetLength(self.parts[0]^.base_atpa, 0);
   end else
     self.bounds := self.parts[0]^.bounds;
 
@@ -288,6 +292,8 @@ begin
     smartImage.drawBox(self.parts[0]^.base_atpa[i].GetBounds(), clYellow);
 
   {$endif}
+
+  SetLength(self.parts[0]^.base_atpa, 0);
 
   if @f <> nil then
     self.filter := @o;
@@ -327,6 +333,53 @@ procedure TPlayer.Configure()
 begin
   disableSRLDebug := not booleans[CFG_SHOW_SRL_DEBUG];
   ignot := ignots.Get(strings[CFG_IGNOT_TYPE], integers[CFG_IGNOT_TIER]);
+
+  self.Login();
+
+  minimap.clickCompass();
+  mainscreen.setAngle(MS_ANGLE_HIGH);
+end
+
+function MouseRandom(const p: TPoint; mouse_action: integer): TPoint
+var
+  mouse_style: array [0..2] of integer;
+  x, y: integer;
+begin
+  mouse_style := [MOUSE_BREAK, MOUSE_ACCURATE, MOUSE_HUMAN];
+  mouseSpeed := RandomRange(30, 38);
+
+  if (mouse_action = MOUSE_MOVE) then
+    MissMouse(p, true)
+  else
+    Mouse(p, mouse_action, mouse_style[Random(2)]);
+
+  GetMousePos(x, y);
+
+  result := TPoint([x, y]);
+end
+
+function TSurfaceObject.Click(): boolean
+begin
+  result := false;
+
+  if self.Find(mainscreen.GetBounds()) then begin
+    MouseRandom(self.Point(), MOUSE_MOVE);
+
+    if not IsMouseOverText(
+      [self.name], RandomRange(800, 1000)
+    ) then begin
+      FastClick(MOUSE_RIGHT);
+
+      result := chooseOption.Select([self.name]);
+    end else begin
+      FastClick(MOUSE_LEFT);
+
+      result := true;
+    end
+
+    if result then
+      minimap.WaitPlayerMoving();
+  end
 end
 
 procedure Initialize()
@@ -336,7 +389,86 @@ begin
   ClearDebug();
   AddOnTerminate('Uninitialize');
 
-  ignots.Create('Iron', 1, 101);
+  with ignots.Create('Iron', 1, 101)^ do begin
+    inventory_item_dtm := DTMFromString('mlwAAAHicY2dgYIhjYmCIBOJUIA4BYj8gToa' +
+      'KbWFkYNgBxLuAeA8QHwLiI0C8H4gZGJiwYEaG5Lg4BlxAEqcMCgAA1UcJAQ==');
+  end
+
+  with chute do begin
+    name := 'Chute';
+    filter := @SurfaceFilterClosest;
+
+    with parts.Create()^ do begin
+      color_settings.CTS := 3;
+      color_settings.modifier.sensitivity := 1.00;
+      color_tolerance := 1;
+      filter := @SurfaceFilterClosest;
+      color := 1184276;
+      max_distance := 300;
+      step := 16;
+      min_pixel_count := 70;
+      size.x1 := 10;
+      size.x2 := 80;
+      size.y1 := 10;
+      size.y2 := 80;
+      anti := false;
+    end
+  end
+
+  with anvil do begin
+    name := 'Anvil';
+    filter := @SurfaceFilterClosest;
+
+    with parts.Create()^ do begin
+      color_settings.CTS := 2;
+      color_settings.modifier.hue := 0.35;
+      color_settings.modifier.saturation := 0.24;
+      color_tolerance := 2;
+      filter := @SurfaceFilterClosest;
+      color := 5068645;
+      max_distance := 300;
+      step := 16;
+      min_pixel_count := 100;
+      size.x1 := 10;
+      size.x2 := 80;
+      size.y1 := 10;
+      size.y2 := 80;
+      anti := false;
+    end
+
+    with parts.Create()^ do begin
+      color_settings.CTS := 2;
+      color_settings.modifier.hue := 0.09;
+      color_settings.modifier.saturation := 0.10;
+      color_tolerance := 4;
+      filter := @SurfaceFilterClosest;
+      color := 6451073;
+      max_distance := 600;
+      step := 16;
+      min_pixel_count :=  20;
+      size.x1 := 3;
+      size.x2 := 400;
+      size.y1 := 3;
+      size.y2 := 400;
+      anti := true;
+    end
+
+    with parts.Create()^ do begin
+      color_settings.CTS := 3;
+      color_settings.modifier.sensitivity := 1.00;
+      color_tolerance := 5;
+      filter := @SurfaceFilterClosest;
+      color := 1579295;
+      max_distance := 600;
+      step := 16;
+      min_pixel_count :=  10;
+      size.x1 := 4;
+      size.x2 := 400;
+      size.y1 := 4;
+      size.y2 := 400;
+      anti := true;
+    end
+  end
 
   with playerform do begin
     name := 'SuperUser''s Artisans Workshop';
@@ -353,10 +485,14 @@ begin
 
   disableSRLDebug := true;
   currentPlayer := 0;
+  smartPlugins := ['d3d9.dll'];
+  smartEnableDrawing := true;
 
   RunPlayerForm();
 
   players.setup(playerForm.playerNames, playerForm.playerFile);
+
+  SetupSRL();
 
   for i := 0 to high(players) do
     with players[i] do begin
@@ -381,14 +517,121 @@ procedure Uninitialize()
 var
   i: integer;
 begin
-  for i := 0 to High(ignots) do
+  for i := 0 to High(ignots) do begin
+    FreeDtm(ignots[i]^.inventory_item_dtm);
     FreeMem(ignots[i]);
+  end
 end
 
-function GetInstructions(): string
+function GetCurrentInstructions(): string
 begin
+  result := GetTextAtEx(260, 34, 322, 57, 1, 4, 1, 16777215, 10, statchars);
+
+  case result of
+    'Boots', 'Gauntlets', 'Chestplate', 'Helm': Exit();
+  end
+
+  WriteLn('Couldn''t get current instructions from Suak!');
+
+  TerminateScript();
+end
+
+procedure SmithBurialArmour(ci: string = ''; tries: integer = 3)
+var
+  s: integer;
+  t: TTimeMarker;
+begin
+  if tries = 0 or tabBackpack.CountDTM(ignot^.inventory_item_dtm) = 0 then
+    TerminateScript();
+
+  if not productionScreen.isOpen() then begin
+    ci := GetCurrentInstructions();
+
+    if (not anvil.Click()) or (not productionScreen.isOpen(3000)) then begin
+      mainscreen.setAngle(MS_ANGLE_HIGH);
+      minimap.setAngle(Random(360));
+
+      SmithBurialArmour(ci, tries - 1);
+
+      Exit();
+    end
+  end
+
+  case ci of
+    'Helm': s := 1;
+    'Boots': s := 2;
+    'Gauntlets': s := 3;
+    'Chestplate': s := 4;
+  end
+
+  if not productionScreen.selectBox(s, [Copy(ci, 2)]) then begin
+    SmithBurialArmour(ci, tries - 1);
+
+    Exit();
+  end
+
+  productionScreen.clickStart();
+
+  repeat
+    if GetCurrentInstructions() <> ci then begin
+      progressScreen.FindButton(PROGRESS_BUTTON_CANCEL, 4000, true);
+
+      break;
+    end
+
+    Wait(RandomRange(33, 66));
+
+    if tabBackpack.CountDTM(ignot^.inventory_item_dtm) = 0 then begin
+      progressScreen.FindButton(PROGRESS_BUTTON_DONE, 4000, true);
+
+      break;
+    end
+  until false;
+
+  t.Start();
+
+  while productionScreen.isOpen(100) do
+    if t.GetTime() > 2000 then
+      Exit();
+end
+
+procedure DepositToChute(tries: integer = 3)
+var
+  c: integer;
+  t: TTimeMarker;
+begin
+  if tries = 0 then
+    TerminateScript();
+
+  if tabBackpack.CountDTM(ignot^.inventory_item_dtm) > 0 then
+    Exit();
+
+  c := tabBackpack.count();
+
+  chute.Click();
+
+  t.start();
+
+  repeat
+    Wait(RandomRange(33, 66));
+
+    if t.GetTime() > 2000 then begin
+      DepositToChute(tries - 1);
+
+      Exit();
+    end;
+  until tabBackpack.count() <> c;
 end
 
 begin
   Initialize();
+
+  repeat
+    DepositToChute();
+    SmithBurialArmour();
+
+  until false;
+
+  //
+
 end.
