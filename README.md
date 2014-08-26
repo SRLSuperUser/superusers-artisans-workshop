@@ -1,2 +1,2 @@
-artisans-workshop
+SuperUser's Artisan's Workshop
 =================
