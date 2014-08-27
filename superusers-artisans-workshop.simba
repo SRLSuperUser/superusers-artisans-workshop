@@ -59,6 +59,8 @@ type
 
   TStatistics = record
     ignot: ^TIgnot;
+    level,
+    xp_start: integer;
   end
 
 var
@@ -299,6 +301,11 @@ begin
     self.filter := @o;
 end
 
+function TIgnot.CountInventory(): integer
+begin
+  result := tabBackpack.CountDTM(self.inventory_item_dtm);
+end
+
 function TIgnotArray.Create(
   const _type_: string = '';
   _tier: integer = 1;
@@ -329,17 +336,6 @@ begin
   result := nil;
 end
 
-procedure TPlayer.Configure()
-begin
-  disableSRLDebug := not booleans[CFG_SHOW_SRL_DEBUG];
-  ignot := ignots.Get(strings[CFG_IGNOT_TYPE], integers[CFG_IGNOT_TIER]);
-
-  self.Login();
-
-  minimap.clickCompass();
-  mainscreen.setAngle(MS_ANGLE_HIGH);
-end
-
 function MouseRandom(const p: TPoint; mouse_action: integer): TPoint
 var
   mouse_style: array [0..2] of integer;
@@ -358,9 +354,31 @@ begin
   result := TPoint([x, y]);
 end
 
-function TSurfaceObject.Click(): boolean
+procedure TPlayer.Configure()
+begin
+  disableSRLDebug := not booleans[CFG_SHOW_SRL_DEBUG];
+  ignot := ignots.Get(strings[CFG_IGNOT_TYPE], integers[CFG_IGNOT_TIER]);
+
+  self.Login();
+
+  minimap.clickCompass();
+
+  MouseRandom(mainscreen.playerPoint, MOUSE_MOVE);
+
+  mainscreen.setAngle(MS_ANGLE_HIGH);
+  statistics.level := tabStats.GetSkillLevel(SKILL_SMITHING);
+  statistics.xp_start := statistics.GetXp();
+end
+
+function TSurfaceObject.Click(
+  tries: integer = 5;
+  rotate: boolean = false
+): boolean
 begin
   result := false;
+
+  if tries = 0 then
+    Exit();
 
   if self.Find(mainscreen.GetBounds()) then begin
     MouseRandom(self.Point(), MOUSE_MOVE);
@@ -379,6 +397,12 @@ begin
 
     if result then
       minimap.WaitPlayerMoving();
+  end
+
+  if not result and rotate then begin
+    minimap.setAngle(Random(360));
+
+    Exit(self.Click(tries - 1, rotate));
   end
 end
 
@@ -406,11 +430,11 @@ begin
       color := 1184276;
       max_distance := 300;
       step := 16;
-      min_pixel_count := 70;
-      size.x1 := 10;
-      size.x2 := 80;
-      size.y1 := 10;
-      size.y2 := 80;
+      min_pixel_count := 10;
+      size.x1 := 4;
+      size.x2 := 120;
+      size.y1 := 4;
+      size.y2 := 120;
       anti := false;
     end
   end
@@ -536,12 +560,12 @@ begin
   TerminateScript();
 end
 
-procedure SmithBurialArmour(ci: string = ''; tries: integer = 3)
+procedure SmithBurialArmour(ci: string = ''; tries: integer = 5)
 var
   s: integer;
   t: TTimeMarker;
 begin
-  if tries = 0 or tabBackpack.CountDTM(ignot^.inventory_item_dtm) = 0 then
+  if tries = 0 or ignot^.CountInventory() = 0 then
     TerminateScript();
 
   if not productionScreen.isOpen() then begin
@@ -572,55 +596,84 @@ begin
 
   productionScreen.clickStart();
 
-  repeat
-    if GetCurrentInstructions() <> ci then begin
-      progressScreen.FindButton(PROGRESS_BUTTON_CANCEL, 4000, true);
+  if progressScreen.isOpen(5000) then begin
+    repeat
+      if (GetCurrentInstructions() <> ci) or
+        (Pos(Copy(ci, 2, 3), progressScreen.GetItem()) < 1) then begin
+        progressScreen.FindButton(PROGRESS_BUTTON_CANCEL, 4000, true);
 
-      break;
-    end
+        break;
+      end
 
-    Wait(RandomRange(33, 66));
+      Wait(RandomRange(33, 66));
 
-    if tabBackpack.CountDTM(ignot^.inventory_item_dtm) = 0 then begin
-      progressScreen.FindButton(PROGRESS_BUTTON_DONE, 4000, true);
+      if ignot^.CountInventory() = 0 then begin
+        progressScreen.FindButton(PROGRESS_BUTTON_DONE, 4000, true);
 
-      break;
-    end
-  until false;
+        break;
+      end
+    until false;
 
-  t.Start();
+    t.Start();
 
-  while productionScreen.isOpen(100) do
-    if t.GetTime() > 2000 then
-      Exit();
+    while progressScreen.isOpen(100) do
+      if t.GetTime() > 2000 then
+        Exit();
+  end
 end
 
-procedure DepositToChute(tries: integer = 3)
+function TStatistics.GetXp(): integer
+var
+  dtm_smithing, x, y: integer;
+  s: string;
+begin
+  result := -1;
+  dtm_smithing := DTMFromString('mWAAAAHicY2FgYPjGBMHvgfgLEP8HirEyQug/QMzEyMS' +
+    'gr60Jpu/fucMAAvwMDCg0OgAAZ74KHg==');
+
+  with GetClientBounds() do
+    if FindDtm(dtm_smithing, x, y, x1, y1, x2, y2) then begin
+      s := TesseractGetText(x - 90, y - 5, x - 11, y + 12, FILTER_SMALL_CHARS);
+      if length(s) > 0 then
+      result := StrToInt(ReplaceRegExpr('[\.,\s]+?', s, '', true));
+    end
+
+  FreeDtm(dtm_smithing);
+end
+
+function TStatistics.GetXpGained(): integer
+begin
+  result := self.GetXp() - self.xp_start;
+end
+
+function DepositToChute(tries: integer = 3): boolean
 var
   c: integer;
   t: TTimeMarker;
 begin
+  result := false;
+
   if tries = 0 then
     TerminateScript();
 
-  if tabBackpack.CountDTM(ignot^.inventory_item_dtm) > 0 then
+  if ignot^.CountInventory() > 0 then
     Exit();
 
-  c := tabBackpack.count();
+  c := tabBackpack.Count();
 
-  chute.Click();
+  if not chute.Click(5, true) then
+    Exit(DepositToChute(tries - 1));
 
   t.start();
 
   repeat
     Wait(RandomRange(33, 66));
 
-    if t.GetTime() > 2000 then begin
-      DepositToChute(tries - 1);
+    if t.GetTime() > 2000 then
+      Exit(DepositToChute(tries - 1));
+  until tabBackpack.Count() <> c;
 
-      Exit();
-    end;
-  until tabBackpack.count() <> c;
+  result := true;
 end
 
 begin
@@ -629,9 +682,5 @@ begin
   repeat
     DepositToChute();
     SmithBurialArmour();
-
   until false;
-
-  //
-
 end.
