@@ -8,7 +8,9 @@
     <colordata color="5331818"/>
     <colordata color="5002596"/>
     <colordata color="5068388"/>
-    <colordata color="4541516"/>
+    <colordata color="5200232"/>
+    <colordata color="5134696"/>
+    <colordata color="5134439"/>
   </profile>
   <profile name="Anvil - anti" cts="2">
     <colordata color="6846346"/>
@@ -16,15 +18,35 @@
     <colordata color="6714246"/>
     <colordata color="6977932"/>
     <colordata color="5858678"/>
+    <colordata color="6912139"/>
+    <colordata color="6846089"/>
   </profile>
-  <profile name="Chute" cts="3">
+  <profile name="Chute" cts="2">
     <colordata color="1184276"/>
     <colordata color="1184275"/>
+    <colordata color="1052689"/>
   </profile>
   <profile name="Anvil - anti 2" cts="3">
     <colordata color="1711138"/>
     <colordata color="1381660"/>
     <colordata color="2039593"/>
     <colordata color="1184276"/>
+  </profile>
+  <profile name="Smelter" cts="2">
+    <colordata color="10445964"/>
+    <colordata color="7424099"/>
+    <colordata color="7226976"/>
+    <colordata color="10708623"/>
+    <colordata color="11694235"/>
+    <colordata color="8024412"/>
+    <colordata color="8155998"/>
+    <colordata color="8221792"/>
+  </profile>
+  <profile name="Smelter 1" cts="2">
+    <colordata color="2896442"/>
+    <colordata color="2633270"/>
+    <colordata color="2633013"/>
+    <colordata color="1250841"/>
+    <colordata color="3028029"/>
   </profile>
 </acaprofile>
