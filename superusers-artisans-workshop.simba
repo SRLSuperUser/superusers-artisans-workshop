@@ -61,6 +61,10 @@ type
     ignot: ^TIgnot;
     level,
     xp_start: integer;
+    canvas: TMufasaBitmap;
+    canvas_location: TPoint;
+    bounds: TBox;
+    last_update: TTimeMarker;
   end
 
 var
@@ -68,6 +72,73 @@ var
   ignots: TIgnotArray;
   ignot: ^TIgnot = nil;
   chute, anvil, smelter: TSurfaceObject;
+
+procedure TMufasaBitmap.Print(
+  const s: string;
+  col,
+  row: integer;
+  color: TColor = clWhite;
+  col_offset: integer = 100
+)
+begin
+  if col = 1 then
+    col_offset := 110;
+
+  self.DrawClippedText(
+    s,
+    [4 + col * col_offset, 42 + row * 15],
+    'statChars',
+    true,
+    color
+  );
+end
+
+procedure TStatistics.Update()
+var
+  b: TMufasaBitmap;
+  tr: integer;
+begin
+  if self.last_update.GetTime() < 1000 then
+    Exit();
+
+  self.last_update.Start();
+
+  b := GetMufasaBitmap(CopyBitmap(self.canvas.getIndex()));
+  tr := GetTimeRunning();
+
+  b.Print('Time running', 0, 0);
+  b.Print(Copy(MSToTime(tr, TIME_BARE), 0, 5), 1, 0, clYellow);
+
+  smartImage.drawBitmap(b.getIndex(), self.canvas_location);
+
+  b.Free();
+end
+
+procedure TStatistics.Initialize()
+begin
+  with actionBar.GetBounds() do begin
+    self.bounds.x1 := 0;
+    self.bounds.x2 := x2;
+    self.bounds.y1 := 0;
+    self.bounds.y2 := __smartClientHeight - y1;
+
+    self.canvas.init(Client.GetMBitmaps);
+    self.canvas.SetSize(self.bounds.x2 + 1, self.bounds.y2 + 1);
+
+    self.canvas.Rectangle(self.bounds, $385385);
+    self.canvas.Rectangle([0, 0, self.bounds.x2, 33], $21314e);
+    self.canvas.DrawText(
+      'SuperUser''s Artisan''s Workshop', Point(4, 2), BigChars, false, clWhite
+    );
+
+    with self.canvas_location do begin
+      x := 0;
+      y := y1;
+    end
+  end
+
+  self.last_update.Start();
+end
 
 function TBox.FindColorsTPA(
   const tcs: TColorSettings;
@@ -542,7 +613,7 @@ begin
 
     comboBoxLabels := ['Ignot type', 'Ignot tier'];
     comboBoxDefaults := ['Iron', '1'];
-    comboBoxItems := [['Iron'], ['1']];
+    comboBoxItems := [['Iron'], ['1', '2', '3']];
 
     checkBoxLabels := ['Show SRL debug'];
     checkBoxDefaults := ['false'];
@@ -576,6 +647,9 @@ begin
     end
 
   players[currentPlayer].Configure();
+
+  statistics.Initialize();
+  statistics.Update();
 end
 
 procedure Uninitialize()
@@ -588,17 +662,23 @@ begin
   end
 end
 
-function GetCurrentInstructions(): string
+function GetCurrentInstructions(tries: integer = 5): string
 begin
+  if tries = 0 then begin
+    WriteLn('Couldn''t get current instructions from Suak!');
+
+    TerminateScript();
+  end
+
   result := GetTextAtEx(260, 34, 322, 57, 1, 4, 1, 16777215, 10, statchars);
 
   case result of
     'Boots', 'Gauntlets', 'Chestplate', 'Helm': Exit();
   end
 
-  WriteLn('Couldn''t get current instructions from Suak!');
+  Wait(RandomRange(200, 800));
 
-  TerminateScript();
+  result := GetCurrentInstructions(tries - 1);
 end
 
 function TRSProductionScreen.Close(): boolean
@@ -635,8 +715,11 @@ var
 begin
   result := false;
 
-  if tries = 0 or ignot^.CountInventory() = 0 then
+  if tries = 0 then
     TerminateScript();
+
+  if ignot^.CountInventory() = 0 then
+    Exit(false);
 
   if not productionScreen.IsOpen() then begin
     ci := GetCurrentInstructions();
@@ -674,6 +757,8 @@ begin
 
   if progressScreen.IsOpen(5000) then begin
     repeat
+      statistics.Update();
+
       if (GetCurrentInstructions() <> ci) or
         (Pos(Copy(ci, 2, 3), progressScreen.GetItem()) < 1) then begin
         progressScreen.FindButton(PROGRESS_BUTTON_CANCEL, 4000, true);
@@ -773,8 +858,12 @@ begin
       Exit(SmeltIgnots(tries - 1));
   end
 
-  if not productionScreen.SelectBox(1) then
-    Exit(SmeltIgnots(tries - 1));
+  case ignot^.type_ of
+    'Iron': if not productionScreen.SelectBox(ignot^.tier) then
+      Exit(SmeltIgnots(tries - 1));
+
+    else TerminateScript();
+  end
 
   t.Start();
 
@@ -794,8 +883,8 @@ begin
   Initialize();
 
   repeat
+    DepositArmourToChute();
     SmeltIgnots();
     SmithBurialArmour();
-    DepositArmourToChute();
   until false;
 end.
