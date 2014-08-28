@@ -72,6 +72,7 @@ var
   ignots: TIgnotArray;
   ignot: ^TIgnot = nil;
   chute, anvil, smelter: TSurfaceObject;
+  armours: TIntegerArray;
 
 procedure Die(const reason: string)
 begin
@@ -492,6 +493,18 @@ begin
   ClearDebug();
   AddOnTerminate('Uninitialize');
 
+  armours.Append(DTMFromString('mggAAAHicY2NgYAhmY2DwBuJIIPaA4mgg5mJmYOAFYh4g' +
+    'FgRiYSDmB2IGBiYcmBwAABYbAoE=')); // Miner helm.
+
+  armours.Append(DTMFromString('mggAAAHicY2NgYFjMxMCwEIhXAfESIF4AxBuA2JORgcEH' +
+    'iL2AOASIY4E4CIgZGJhwYHIAAHymBek=')); // Miner boots.
+
+  armours.Append(DTMFromString('mggAAAHicY2NgYLjNxMBwDYgvAfFZIH4AxDeB2JORgcEX' +
+    'iAOAOAqI/YA4EIgZGJhwYHIAAAIJBw0=')); // Miner gauntlets.
+
+  armours.Append(DTMFromString('mggAAAHicY2NgYPjBxMDwG4g/A7EAMwMDJxB/BbI9GSHY' +
+    'F4j9oOxgIGZgYMKByQEAhR4F5A==')); // Miner chestplate.
+
   with ignots.Create('Iron', 1, 101)^ do begin
     inventory_item_dtm := DTMFromString('mlwAAAHicY2dgYIhjYmCIBOJUIA4BYj8gToa' +
       'KbWFkYNgBxLuAeA8QHwLiI0C8H4gZGJiwYEaG5Lg4BlxAEqcMCgAA1UcJAQ==');
@@ -663,6 +676,9 @@ procedure Uninitialize()
 var
   i: integer;
 begin
+  for i := 0 to High(armours) do
+    FreeDtm(armours[i]);
+
   for i := 0 to High(ignots) do begin
     FreeDtm(ignots[i]^.inventory_item_dtm);
     FreeMem(ignots[i]);
@@ -814,7 +830,7 @@ end
 
 function DepositArmourToChute(tries: integer = 5): boolean
 var
-  c: integer;
+  c, i: integer;
   t: TTimeMarker;
 begin
   result := false;
@@ -823,6 +839,18 @@ begin
     Die('Couldn''t deposit armour to the chute');
 
   if ignot^.CountInventory() > 0 then
+    Exit();
+
+  c := 0;
+
+  for i := 0 to High(armours) do
+    if tabBackpack.CountDTM(armours[i]) > 0 then begin
+      c := 1;
+
+      break;
+    end
+
+  if c = 0 then
     Exit();
 
   c := tabBackpack.Count();
