@@ -486,11 +486,11 @@ begin
 
     with parts.Create()^ do begin
       color_settings.CTS := 2;
-      color_settings.modifier.hue := 0.35;
-      color_settings.modifier.saturation := 0.40;
-      color_tolerance := 2;
+      color_settings.modifier.hue := 0.27;
+      color_settings.modifier.saturation := 0.27;
+      color_tolerance := 4;
       filter := @SurfaceFilterClosest;
-      color := 5068645;
+      color := 5266281;
       max_distance := 300;
       step := 16;
       min_pixel_count := 100;
@@ -601,6 +601,33 @@ begin
   TerminateScript();
 end
 
+function TRSProductionScreen.Close(): boolean
+var
+  dtm_close, _x, _y: integer;
+  t: TTimeMarker;
+begin
+  dtm_close := DTMFromString('mbQAAAHicY2VgYHjIysBwF4ifAvETIL4HxJ8ZGRjeQ/E3KP6zxZ' +
+    'Th76UkMP4yUwKM+YH60TFOAABPDxMi');
+
+  with mainscreen.GetBounds() do
+    if FindDtm(dtm_close, _x, _y, x1, y1, x2, y2) then begin
+      MouseRandom(Point(_x, _y), MOUSE_LEFT);
+
+      t.Start();
+
+      repeat
+        if t.GetTime() > 5000 then
+          break;
+
+        Wait(RandomRange(33, 66));
+      until not self.IsOpen();
+    end
+
+  result := not self.IsOpen();
+
+  FreeDtm(dtm_close);
+end
+
 function SmithBurialArmour(ci: string = ''; tries: integer = 5): boolean;
 var
   s: integer;
@@ -611,11 +638,17 @@ begin
   if tries = 0 or ignot^.CountInventory() = 0 then
     TerminateScript();
 
-  if not productionScreen.isOpen() then begin
+  if not productionScreen.IsOpen() then begin
     ci := GetCurrentInstructions();
 
     if (not anvil.Click(5, true)) or (not productionScreen.isOpen(3000)) then
       Exit(SmithBurialArmour(ci, tries - 1));
+  end else if ci = '' then begin
+    productionScreen.Close();
+
+    ci := GetCurrentInstructions();
+
+    Exit(SmithBurialArmour(ci, tries));
   end
 
   case ci of
@@ -625,12 +658,21 @@ begin
     'Chestplate': s := 4;
   end
 
-  if not productionScreen.selectBox(s, [Copy(ci, 2)]) then
+  if not productionScreen.SelectBox(s, [Copy(ci, 2)]) then
     Exit(SmithBurialArmour(ci, tries - 1));
 
-  productionScreen.clickStart();
+  t.Start();
 
-  if progressScreen.isOpen(5000) then begin
+  repeat
+    productionScreen.ClickStart(false);
+
+    Wait(RandomRange(500, 1000));
+
+    if t.GetTime() > 5000 then
+      Exit(SmithBurialArmour(ci, tries - 1));
+  until not productionScreen.IsOpen();
+
+  if progressScreen.IsOpen(5000) then begin
     repeat
       if (GetCurrentInstructions() <> ci) or
         (Pos(Copy(ci, 2, 3), progressScreen.GetItem()) < 1) then begin
@@ -650,8 +692,8 @@ begin
 
     t.Start();
 
-    while progressScreen.isOpen(100) do
-      if t.GetTime() > 2000 then
+    while progressScreen.IsOpen(100) do
+      if t.GetTime() > 5000 then
         Exit(true);
   end
 
@@ -670,8 +712,7 @@ begin
   with GetClientBounds() do
     if FindDtm(dtm_smithing, x, y, x1, y1, x2, y2) then begin
       s := TesseractGetText(x - 90, y - 5, x - 11, y + 12, FILTER_SMALL_CHARS);
-      if length(s) > 0 then
-      result := StrToInt(ReplaceRegExpr('[\.,\s]+?', s, '', true));
+      result := StrToIntDef(ExtractFromStr(s, numbers), -1);
     end
 
   FreeDtm(dtm_smithing);
@@ -721,25 +762,30 @@ begin
   if tries = 0 then
     TerminateScript();
 
-  if ignot^.CountInventory() > 0 then
-    Exit();
+  if not productionScreen.IsOpen() then begin
+    if ignot^.CountInventory() > 0 then
+      Exit();
 
-  if not smelter.Click(5, true) then
+    if not smelter.Click(5, true) then
+      Exit(SmeltIgnots(tries - 1));
+
+    if not productionScreen.IsOpen(3000) then
+      Exit(SmeltIgnots(tries - 1));
+  end
+
+  if not productionScreen.SelectBox(1) then
     Exit(SmeltIgnots(tries - 1));
-
-  if not productionScreen.isOpen(3000) then
-    Exit(SmeltIgnots(tries - 1));
-
-  if not productionScreen.selectBox(1) then
-    Exit(SmeltIgnots(tries - 1));
-
-  productionScreen.clickStart();
 
   t.Start();
 
-  while productionScreen.isOpen(100) do
-    if t.GetTime() > 2000 then
-      break;
+  repeat
+    productionScreen.ClickStart(false);
+
+    Wait(RandomRange(500, 1000));
+
+    if t.GetTime() > 5000 then
+      Exit(SmeltIgnots(tries - 1));
+  until not productionScreen.IsOpen();
 
   result := true;
 end
