@@ -73,6 +73,13 @@ var
   ignot: ^TIgnot = nil;
   chute, anvil, smelter: TSurfaceObject;
 
+procedure Die(const reason: string)
+begin
+  WriteLn(reason);
+
+  TerminateScript();
+end
+
 procedure TMufasaBitmap.Print(
   const s: string;
   col,
@@ -664,11 +671,8 @@ end
 
 function GetCurrentInstructions(tries: integer = 5): string
 begin
-  if tries = 0 then begin
-    WriteLn('Couldn''t get current instructions from Suak!');
-
-    TerminateScript();
-  end
+  if tries = 0 then
+    Die('Couldn''t get current instructions from Suak!');
 
   result := GetTextAtEx(260, 34, 322, 57, 1, 4, 1, 16777215, 10, statchars);
 
@@ -716,7 +720,7 @@ begin
   result := false;
 
   if tries = 0 then
-    TerminateScript();
+    Die('Couldn''t smith burial armour!');
 
   if ignot^.CountInventory() = 0 then
     Exit(false);
@@ -816,7 +820,7 @@ begin
   result := false;
 
   if tries = 0 then
-    TerminateScript();
+    Die('Couldn''t deposit armour to the chute');
 
   if ignot^.CountInventory() > 0 then
     Exit();
@@ -845,7 +849,7 @@ begin
   result := false;
 
   if tries = 0 then
-    TerminateScript();
+    Die('Couldn''t smelt ignots!');
 
   if not productionScreen.IsOpen() then begin
     if ignot^.CountInventory() > 0 then
@@ -862,7 +866,7 @@ begin
     'Iron': if not productionScreen.SelectBox(ignot^.tier) then
       Exit(SmeltIgnots(tries - 1));
 
-    else TerminateScript();
+    else Die('Invalid ignot type!?');
   end
 
   t.Start();
