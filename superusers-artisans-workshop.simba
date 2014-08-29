@@ -517,17 +517,17 @@ begin
     with parts.Create()^ do begin
       color_settings.CTS := 2;
       color_settings.modifier.hue := 0.00;
-      color_settings.modifier.saturation := 2.41;
+      color_settings.modifier.saturation := 2.85;
       color_tolerance := 1;
       filter := @SurfaceFilterClosest;
-      color := 1118482;
+      color := 1118483;
       max_distance := 300;
-      step := 16;
+      step := 2;
       min_pixel_count := 20;
       size.x1 := 6;
-      size.x2 := 80;
+      size.x2 := 60;
       size.y1 := 6;
-      size.y2 := 80;
+      size.y2 := 60;
       anti := false;
     end
   end
@@ -547,9 +547,9 @@ begin
       step := 3;
       min_pixel_count := 10;
       size.x1 := 5;
-      size.x2 := 140;
+      size.x2 := 240;
       size.y1 := 5;
-      size.y2 := 140;
+      size.y2 := 240;
       anti := false;
     end
 
@@ -564,9 +564,9 @@ begin
       step := 8;
       min_pixel_count := 8;
       size.x1 := 3;
-      size.x2 := 300;
+      size.x2 := 100;
       size.y1 := 3;
-      size.y2 := 300;
+      size.y2 := 100;
       anti := false;
     end
   end

@@ -24,10 +24,11 @@
     <colordata color="6912139"/>
     <colordata color="6846089"/>
   </profile>
-  <profile name="Chute" cts="2">
+  <profile name="Chute" cts="3">
     <colordata color="1184276"/>
     <colordata color="1184275"/>
     <colordata color="1052689"/>
+    <colordata color="1052690"/>
   </profile>
   <profile name="Anvil - anti 2" cts="3">
     <colordata color="1711138"/>
