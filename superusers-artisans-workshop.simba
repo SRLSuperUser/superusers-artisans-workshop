@@ -475,8 +475,11 @@ begin
       result := true;
     end
 
-    if result then
+    if result then begin
+      Wait(RandomRange(500, 1200));
+
       minimap.WaitPlayerMoving();
+    end
   end
 
   if not result and rotate then begin
@@ -744,7 +747,7 @@ begin
   if not productionScreen.IsOpen() then begin
     ci := GetCurrentInstructions();
 
-    if (not anvil.Click(5, true)) or (not productionScreen.isOpen(3000)) then
+    if (not anvil.Click(5, true)) or (not productionScreen.isOpen(8000)) then
       Exit(SmithBurialArmour(ci, tries - 1));
   end else if ci = '' then begin
     productionScreen.Close();
