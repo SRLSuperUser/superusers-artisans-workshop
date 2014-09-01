@@ -486,6 +486,62 @@ begin
   end
 end
 
+function TRSProductionScreen.Close(): boolean
+var
+  dtm_close, _x, _y: integer;
+  t: TTimeMarker;
+begin
+  dtm_close := DTMFromString('mbQAAAHicY2VgYHjIysBwF4ifAvETIL4HxJ8ZGRjeQ/E3KP6zxZ' +
+    'Th76UkMP4yUwKM+YH60TFOAABPDxMi');
+
+  with mainscreen.GetBounds() do
+    if FindDtm(dtm_close, _x, _y, x1, y1, x2, y2) then begin
+      MouseRandom(Point(_x, _y), MOUSE_LEFT);
+
+      t.Start();
+
+      repeat
+        if t.GetTime() > 5000 then
+          break;
+
+        Wait(RandomRange(33, 66));
+      until not self.IsOpen();
+    end
+
+  result := not self.IsOpen();
+
+  FreeDtm(dtm_close);
+end
+
+function GetCurrentInstructions(tries: integer = 5): string
+var
+  t: TTimeMarker;
+begin
+  if tries = 0 then
+    Die('Couldn''t get current instructions from Suak!');
+
+  t.Start();
+
+  while GetPixelShift(IntToBox(260, 34, 322, 50), 50) > 0 do begin
+    Wait(66);
+
+    if t.GetTime() > 10000 then
+      Exit(GetCurrentInstructions(tries - 1));
+  end
+
+  result := GetTextAtEx(260, 34, 322, 50, 1, 4, 1, 16777215, 10, statchars);
+
+  case result of
+    'Boots', 'Gauntlets', 'Chestplate', 'Helm': Exit();
+  end
+
+  Wait(RandomRange(200, 800));
+
+  productionScreen.Close();
+
+  result := GetCurrentInstructions(tries - 1);
+end
+
 procedure Initialize()
 var
   i, j: integer;
@@ -685,49 +741,6 @@ begin
   end
 end
 
-function GetCurrentInstructions(tries: integer = 5): string
-begin
-  if tries = 0 then
-    Die('Couldn''t get current instructions from Suak!');
-
-  result := GetTextAtEx(260, 34, 322, 57, 1, 4, 1, 16777215, 10, statchars);
-
-  case result of
-    'Boots', 'Gauntlets', 'Chestplate', 'Helm': Exit();
-  end
-
-  Wait(RandomRange(200, 800));
-
-  result := GetCurrentInstructions(tries - 1);
-end
-
-function TRSProductionScreen.Close(): boolean
-var
-  dtm_close, _x, _y: integer;
-  t: TTimeMarker;
-begin
-  dtm_close := DTMFromString('mbQAAAHicY2VgYHjIysBwF4ifAvETIL4HxJ8ZGRjeQ/E3KP6zxZ' +
-    'Th76UkMP4yUwKM+YH60TFOAABPDxMi');
-
-  with mainscreen.GetBounds() do
-    if FindDtm(dtm_close, _x, _y, x1, y1, x2, y2) then begin
-      MouseRandom(Point(_x, _y), MOUSE_LEFT);
-
-      t.Start();
-
-      repeat
-        if t.GetTime() > 5000 then
-          break;
-
-        Wait(RandomRange(33, 66));
-      until not self.IsOpen();
-    end
-
-  result := not self.IsOpen();
-
-  FreeDtm(dtm_close);
-end
-
 function SmithBurialArmour(ci: string = ''; tries: integer = 5): boolean;
 var
   s: integer;
@@ -747,8 +760,6 @@ begin
     if (not anvil.Click(5, true)) or (not productionScreen.isOpen(3000)) then
       Exit(SmithBurialArmour(ci, tries - 1));
   end else if ci = '' then begin
-    productionScreen.Close();
-
     ci := GetCurrentInstructions();
 
     Exit(SmithBurialArmour(ci, tries));
@@ -918,5 +929,5 @@ begin
     DepositArmourToChute();
     SmeltIgnots();
     SmithBurialArmour();
-  until false;
+  until not IsLoggedIn();
 end.
